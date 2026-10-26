@@ -1,4 +1,5 @@
 import React, { Suspense } from 'react'
+import AccountRequestsPage from './AccountRequestsPage'
 
 const page = () => {
   return (
