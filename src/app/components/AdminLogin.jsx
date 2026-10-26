@@ -26,36 +26,17 @@ const handleAdminLogin = async (e) => {
     });
 
     // Read the response safely, even if Next.js returns an error page.
-    const responseText = await res.text();
-
-    let data;
-
-    try {
-
-         route.push("/admin")
-      // data = JSON.parse(responseText);
-
-
-    } catch {
-      console.error("Login API returned non-JSON:", responseText);
-      throw new Error(
+    const data = await res.json()
+    
+    if(data.success){
+      route.push("/admin")
+    }else{
+            throw new Error(
         `Server returned an invalid response (HTTP ${res.status}). Check the terminal.`
       );
     }
 
-    console.log("Admin login HTTP status:", res.status);
-    console.log("Admin login response:", data);
-
-    if (!res.ok || !data.success) {
-      setAdminError(
-        data.message ||
-          data.debug ||
-          `Login failed with HTTP ${res.status}.`
-      );
-      return;
-    }
-
-    setViewMode("admin-dashboard");
+    
   } catch (err) {
     console.error("Admin login request failed:", err);
     setAdminError(

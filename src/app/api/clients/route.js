@@ -163,7 +163,7 @@ export async function PUT(req) {
     }
 
     const body = await req.json();
-    const { id, hasGeneratedQr, savedQrUrl } = body;
+    const { id, hasGeneratedQr, savedQrUrl ,placeId,googleUrl} = body;
 
     await connectDB();
 
@@ -175,9 +175,61 @@ export async function PUT(req) {
 
     const update = {};
 
-    if (typeof hasGeneratedQr === "boolean") {
-      update.hasGeneratedQr = hasGeneratedQr;
+if (typeof hasGeneratedQr === "boolean") {
+  if (hasGeneratedQr) {
+    if (typeof placeId !== "string" || !placeId.trim()) {
+      return NextResponse.json({
+        success: false,
+        message: "Google Place ID is required.",
+      },
+          { status: 400 });
     }
+
+    if (typeof googleUrl !== "string" || !googleUrl.trim()) {
+      return NextResponse.json({
+        success: false,
+        message: "Google Business URL is required.",
+      },
+          { status: 400 });
+    }
+
+    let parsedUrl;
+
+    try {
+      parsedUrl = new URL(googleUrl.trim());
+    } catch {
+      return NextResponse.json({
+        success: false,
+        message: "Please provide a valid Google Business URL.",
+      },
+          { status: 400 });
+    }
+console.log(parsedUrl)
+    if (
+      !["http:", "https:"].includes(parsedUrl.protocol) ||
+      !(
+        parsedUrl.hostname === "google.com" ||
+        parsedUrl.hostname.endsWith(".google.com") ||
+        parsedUrl.hostname === "maps.app.goo.gl" ||
+        parsedUrl.hostname === "goo.gl" ||
+        parsedUrl.hostname === "share.google" ||
+        parsedUrl.hostname === "g.page"
+      )
+    ) {
+      return NextResponse.json({
+        success: false,
+        message: "Please provide a valid Google Business URL.",
+      },
+          { status: 400 });
+    }
+
+    update.hasGeneratedQr = true;
+    update.placeId = placeId.trim();
+    update.googleUrl = googleUrl.trim();
+  } else {
+    update.hasGeneratedQr = false;
+  }
+}
 
     if (typeof savedQrUrl === "string") {
       if (savedQrUrl.length > 5000) {

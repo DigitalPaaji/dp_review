@@ -1,594 +1,440 @@
-
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import axios from "axios";
-import Image from "next/image";
-import { IoIosHelpCircle } from "react-icons/io";
+import { useRouter } from "next/navigation";
 import {
   FiMail,
   FiLock,
   FiBriefcase,
-  FiMapPin,
-  FiLink,
   FiArrowRight,
+  FiArrowLeft,
   FiCheckCircle,
   FiAlertCircle,
-  FiX,
   FiLoader,
-  FiExternalLink,
+  FiShield,
+  FiRefreshCw,
 } from "react-icons/fi";
 
 import LeftHeroPanel from "../components/LeftHeroPanel";
-import { useRouter } from "next/navigation";
 
-const PLACE_ID_FINDER =
-  "https://developers.google.com/maps/documentation/javascript/examples/places-placeid-finder";
+export default function RegisterPage() {
+  const router = useRouter();
 
-const Page = () => {
+  const [step, setStep] = useState(1);
   const [formData, setFormData] = useState({
     email: "",
     password: "",
     businessName: "",
-    placeId: "",
-    googleUrl: "",
   });
 
-  const route = useRouter()
-  const [showhelp, setShowhelp] = useState("");
+  const [otp, setOtp] = useState("");
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
   const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState({
-    type: "",
-    text: "",
-  });
+  const [resending, setResending] = useState(false);
+  const [countdown, setCountdown] = useState(0);
 
-  const helpContent = {
-    placeid: {
-      title: "Find your Google Place ID",
-      subtitle:
-        "Follow these steps to find and copy your business's unique Place ID.",
-      image: "/gifs/place.gif",
-      externalLink: PLACE_ID_FINDER,
-      linkText: "Open Place ID Finder",
-      steps: [
-        {
-          title: "Open Place ID Finder",
-          description:
-            "Click the button below to open Google's official Place ID Finder in a new tab.",
-        },
-        {
-          title: "Search for your business",
-          description:
-            "Enter your exact business name. Add your city or location if multiple businesses have similar names.",
-        },
-        {
-          title: "Select your business",
-          description:
-            "Choose the correct listing and check that the business location is accurate.",
-        },
-        {
-          title: "Scroll down to Place ID",
-          description:
-            "Find the Place ID field below the map or search area. It contains the unique identifier for your selected business.",
-        },
-        {
-          title: "Copy the Place ID",
-          description:
-            "Copy the complete Place ID and paste it into the Google Place ID field in this form.",
-        },
-      ],
-      note: "Copy the Place ID itself, not the business name or the Google Maps URL.",
-    },
+  useEffect(() => {
+    if (countdown <= 0) return;
 
-    googleurl: {
-      title: "Get your Google Business URL",
-      subtitle:
-        "Find your business on Google and copy its shareable profile link.",
-      image: "/gifs/google.gif",
-      externalLink: "https://www.google.com/",
-      linkText: "Open Google Search",
-      steps: [
-        {
-          title: "Search for your business",
-          description:
-            "Open Google Search and type your exact business name, including your city if needed.",
-        },
-        {
-          title: "Open your business profile",
-          description:
-            "Find your business in the search results and make sure the name and address match.",
-        },
-        {
-          title: "Click Share",
-          description:
-            "On your business profile, click the Share option. If needed, open the listing in Google Maps first.",
-        },
-        {
-          title: "Copy the link",
-          description:
-            "Click Copy link to copy the URL for your business listing.",
-        },
-        {
-          title: "Paste the URL",
-          description:
-            "Return to this form and paste the copied link into the Google Business / Review URL field.",
-        },
-      ],
-      note: "Use the link for your actual business listing. You can also use a direct Google review link if you have one.",
-    },
-  };
+    const timer = setTimeout(() => {
+      setCountdown((previous) => previous - 1);
+    }, 1000);
 
-  const handleInput = (e) => {
-    const { name, value } = e.target;
+    return () => clearTimeout(timer);
+  }, [countdown]);
 
-    setFormData((prev) => ({
-      ...prev,
+  const handleChange = (event) => {
+    const { name, value } = event.target;
+
+    setFormData((previous) => ({
+      ...previous,
       [name]: value,
     }));
+  };
 
-    if (message.text) {
-      setMessage({ type: "", text: "" });
+  const handleOtpChange = (event) => {
+    const value = event.target.value.replace(/\D/g, "").slice(0, 6);
+    setOtp(value);
+    setError("");
+  };
+
+  const sendOtp = async (event) => {
+    if (event) event.preventDefault();
+
+    setError("");
+    setSuccess("");
+
+    const email = formData.email.trim().toLowerCase();
+    const businessName = formData.businessName.trim();
+
+    if (!email || !businessName || !formData.password) {
+      setError("Please fill in all fields.");
+      return;
     }
-  };
 
-  const toggleHelp = (section) => {
-    setShowhelp((current) => (current === section ? "" : section));
-  };
+    if (formData.password.length < 8) {
+      setError("Password must be at least 8 characters long.");
+      return;
+    }
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setMessage({ type: "", text: "" });
+    setLoading(true);
 
     try {
-      setLoading(true);
-
-      const response = await axios.post(
-        "/api/account-requests",
-        formData
-      );
-
-      const data = response.data;
-
-      if (data.success) {
-        setMessage({
-          type: "success",
-          text:
-            data.message ||
-            "Your account request has been submitted successfully.",
-        });
-
-        setFormData({
-          email: "",
-          password: "",
-          businessName: "",
-          placeId: "",
-          googleUrl: "",
-        });
-      
-route.push("/")
-
-
-      } else {
-        setMessage({
-          type: "error",
-          text: data.message || "Unable to submit your request.",
-        });
-      }
-    } catch (error) {
-      setMessage({
-        type: "error",
-        text:
-          error.response?.data?.message ||
-          "Something went wrong. Please try again.",
+      const response = await axios.post("/api/account-requests", {
+        email,
+        password: formData.password,
+        businessName,
       });
+
+      setFormData((previous) => ({
+        ...previous,
+        email,
+        businessName,
+      }));
+
+      setOtp("");
+      setStep(2);
+      setCountdown(60);
+      setSuccess(response.data?.message || "OTP sent to your email.");
+    } catch (err) {
+      setError(
+        err.response?.data?.message ||
+          "Unable to send OTP. Please try again."
+      );
     } finally {
       setLoading(false);
     }
   };
 
-  const activeHelp = helpContent[showhelp];
+  const verifyOtp = async (event) => {
+    event.preventDefault();
+    setError("");
+    setSuccess("");
 
-  const inputClass =
-    "w-full rounded-xl border border-slate-200 bg-slate-50/70 py-3 pl-11 pr-4 text-sm text-slate-800 outline-none transition placeholder:text-slate-400 hover:border-slate-300 focus:border-indigo-500 focus:bg-white focus:ring-4 focus:ring-indigo-500/10";
+    if (!/^\d{6}$/.test(otp)) {
+      setError("Please enter the complete 6-digit OTP.");
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      const response = await axios.post("/api/verify-otp", {
+        email: formData.email.trim().toLowerCase(),
+        password: formData.password,
+        businessName: formData.businessName.trim(),
+        otp,
+      });
+
+      setSuccess(response.data?.message || "Account created successfully.");
+
+      setTimeout(() => {
+        router.push("/");
+      }, 1000);
+    } catch (err) {
+      setError(
+        err.response?.data?.message ||
+          "OTP verification failed. Please try again."
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const resendOtp = async () => {
+    if (countdown > 0 || resending) return;
+
+    setError("");
+    setSuccess("");
+    setResending(true);
+
+    try {
+      const response = await axios.post("/api/account-requests", {
+        email: formData.email.trim().toLowerCase(),
+        password: formData.password,
+        businessName: formData.businessName.trim(),
+      });
+
+      setOtp("");
+      setCountdown(60);
+      setSuccess(response.data?.message || "A new OTP has been sent.");
+    } catch (err) {
+      setError(
+        err.response?.data?.message ||
+          "Unable to resend OTP. Please try again."
+      );
+    } finally {
+      setResending(false);
+    }
+  };
 
   return (
-    <div className="h-screen w-full overflow-hidden bg-[#090D16] font-sans text-slate-100 selection:bg-indigo-500 selection:text-white">
-      <div className="grid h-full min-h-0 grid-cols-1 lg:grid-cols-3">
-
-        {/* LEFT HERO: fixed to viewport height */}
-        <aside className="hidden min-h-0 lg:sticky lg:top-0 lg:col-span-1 lg:block lg:h-screen lg:overflow-hidden">
+    <main className="min-h-screen bg-white text-gray-900">
+      <div className="grid min-h-screen lg:grid-cols-2">
+        <div className="hidden lg:block">
           <LeftHeroPanel />
-        </aside>
+        </div>
 
-        {/* RIGHT SIDE: independent scrolling */}
-        <main className="col-span-1 h-screen min-h-0 overflow-y-auto overscroll-contain bg-white text-slate-900 lg:col-span-2">
-          <div className="mx-auto flex min-h-full w-full max-w-6xl flex-col justify-center px-5 py-6 sm:px-8 lg:px-8 xl:px-10">
-
-            {/* Heading */}
-            <div className="mb-6 shrink-0">
-              <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-indigo-100 bg-indigo-50 px-3 py-1.5 text-xs font-semibold text-indigo-700">
-                <span className="h-2 w-2 rounded-full bg-indigo-500" />
-                BUSINESS REGISTRATION
+        <section className="flex min-h-screen items-center justify-center px-5 py-10 sm:px-10">
+          <div className="w-full max-w-md">
+            <div className="mb-8">
+              <div className="mb-6 flex items-center gap-2 lg:hidden">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-black text-white">
+                  <FiShield size={21} />
+                </div>
+                <span className="text-xl font-bold tracking-tight">
+                  Digital Paaji
+                </span>
               </div>
 
-              <h1 className="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
-                Create your account
+              <p className="mb-3 text-sm font-semibold uppercase tracking-[0.2em] text-gray-500">
+                {step === 1 ? "Create your account" : "Email verification"}
+              </p>
+
+              <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">
+                {step === 1 ? "Start your journey" : "Verify your email"}
               </h1>
 
-              <p className="mt-2 max-w-lg text-sm leading-5 text-slate-500">
-                Register your business to get started with your Google review
-                management dashboard.
+              <p className="mt-3 text-sm leading-6 text-gray-500">
+                {step === 1
+                  ? "Create your Digital Paaji account to manage your business."
+                  : `We sent a 6-digit verification code to ${formData.email}.`}
               </p>
             </div>
 
-            {/* Success / Error */}
-            {message.text && (
+            <div className="mb-7 flex items-center gap-3">
               <div
-                role="alert"
-                className={`mb-5 flex shrink-0 items-start gap-3 rounded-xl border p-3 text-sm ${
-                  message.type === "success"
-                    ? "border-emerald-200 bg-emerald-50 text-emerald-800"
-                    : "border-red-200 bg-red-50 text-red-700"
+                className={`flex h-9 w-9 items-center justify-center rounded-full text-sm font-semibold ${
+                  step >= 1
+                    ? "bg-black text-white"
+                    : "bg-gray-100 text-gray-500"
                 }`}
               >
-                {message.type === "success" ? (
-                  <FiCheckCircle className="mt-0.5 shrink-0" size={18} />
-                ) : (
-                  <FiAlertCircle className="mt-0.5 shrink-0" size={18} />
-                )}
+                {step > 1 ? <FiCheckCircle size={18} /> : "1"}
+              </div>
 
-                <p>{message.text}</p>
+              <div
+                className={`h-1 flex-1 rounded-full ${
+                  step === 2 ? "bg-black" : "bg-gray-200"
+                }`}
+              />
+
+              <div
+                className={`flex h-9 w-9 items-center justify-center rounded-full text-sm font-semibold ${
+                  step === 2
+                    ? "bg-black text-white"
+                    : "bg-gray-100 text-gray-500"
+                }`}
+              >
+                2
+              </div>
+            </div>
+
+            {error && (
+              <div className="mb-5 flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+                <FiAlertCircle className="mt-0.5 shrink-0" size={18} />
+                <p>{error}</p>
               </div>
             )}
 
-            {/* Form + Help */}
-            <div className="grid min-w-0 grid-cols-1 items-start gap-6 xl:grid-cols-2">
+            {success && (
+              <div className="mb-5 flex items-start gap-3 rounded-xl border border-green-200 bg-green-50 p-4 text-sm text-green-700">
+                <FiCheckCircle className="mt-0.5 shrink-0" size={18} />
+                <p>{success}</p>
+              </div>
+            )}
 
-              {/* FORM */}
-              <form onSubmit={handleSubmit} className="min-w-0 space-y-4">
-
-                {/* Email */}
-                <div>
-                  <label
-                    htmlFor="email"
-                    className="mb-1.5 block text-sm font-semibold text-slate-700"
-                  >
-                    Email address
-                  </label>
-
-                  <div className="relative">
-                    <FiMail
-                      className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
-                      size={17}
-                    />
-
-                    <input
-                      id="email"
-                      type="email"
-                      name="email"
-                      autoComplete="email"
-                      placeholder="you@company.com"
-                      className={inputClass}
-                      value={formData.email}
-                      onChange={handleInput}
-                      required
-                    />
-                  </div>
-                </div>
-
-                {/* Password */}
-                <div>
-                  <label
-                    htmlFor="password"
-                    className="mb-1.5 block text-sm font-semibold text-slate-700"
-                  >
-                    Password
-                  </label>
-
-                  <div className="relative">
-                    <FiLock
-                      className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
-                      size={17}
-                    />
-
-                    <input
-                      id="password"
-                      type="password"
-                      name="password"
-                      autoComplete="new-password"
-                      placeholder="Create a strong password"
-                      className={inputClass}
-                      value={formData.password}
-                      onChange={handleInput}
-                      minLength={6}
-                      required
-                    />
-                  </div>
-                </div>
-
-                {/* Business name */}
+            {step === 1 ? (
+              <form onSubmit={sendOtp} className="space-y-5">
                 <div>
                   <label
                     htmlFor="businessName"
-                    className="mb-1.5 block text-sm font-semibold text-slate-700"
+                    className="mb-2 block text-sm font-semibold"
                   >
                     Business name
                   </label>
 
                   <div className="relative">
-                    <FiBriefcase
-                      className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
-                      size={17}
-                    />
+                    <FiBriefcase className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
 
                     <input
                       id="businessName"
-                      type="text"
                       name="businessName"
-                      placeholder="Your business name"
-                      className={inputClass}
-                      value={formData.businessName}
-                      onChange={handleInput}
-                      required
-                    />
-                  </div>
-                </div>
-
-                {/* Place ID */}
-                <div>
-                  <div className="mb-1.5 flex items-center justify-between gap-2">
-                    <label
-                      htmlFor="placeId"
-                      className="text-sm font-semibold text-slate-700"
-                    >
-                      Google Place ID
-                    </label>
-
-                    <button
-                      type="button"
-                      onClick={() => toggleHelp("placeid")}
-                      aria-expanded={showhelp === "placeid"}
-                      className={`inline-flex items-center gap-1 text-xs font-semibold ${
-                        showhelp === "placeid"
-                          ? "text-indigo-700"
-                          : "text-indigo-500 hover:text-indigo-700"
-                      }`}
-                    >
-                      <IoIosHelpCircle size={20} />
-                      How to find?
-                    </button>
-                  </div>
-
-                  <div className="relative">
-                    <FiMapPin
-                      className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
-                      size={17}
-                    />
-
-                    <input
-                      id="placeId"
                       type="text"
-                      name="placeId"
-                      placeholder="Enter your Google Place ID"
-                      className={inputClass}
-                      value={formData.placeId}
-                      onChange={handleInput}
+                      value={formData.businessName}
+                      onChange={handleChange}
+                      placeholder="Enter your business name"
+                      autoComplete="organization"
                       required
+                      className="w-full rounded-xl border border-gray-200 bg-white py-3.5 pl-11 pr-4 text-sm outline-none transition focus:border-black focus:ring-2 focus:ring-black/5"
                     />
                   </div>
                 </div>
 
-                {/* Google URL */}
                 <div>
-                  <div className="mb-1.5 flex items-center justify-between gap-2">
-                    <label
-                      htmlFor="googleUrl"
-                      className="text-sm font-semibold text-slate-700"
-                    >
-                      Google Business / Review URL
-                    </label>
-
-                    <button
-                      type="button"
-                      onClick={() => toggleHelp("googleurl")}
-                      aria-expanded={showhelp === "googleurl"}
-                      className={`inline-flex items-center gap-1 text-xs font-semibold ${
-                        showhelp === "googleurl"
-                          ? "text-indigo-700"
-                          : "text-indigo-500 hover:text-indigo-700"
-                      }`}
-                    >
-                      <IoIosHelpCircle size={20} />
-                      How to get?
-                    </button>
-                  </div>
+                  <label
+                    htmlFor="email"
+                    className="mb-2 block text-sm font-semibold"
+                  >
+                    Email address
+                  </label>
 
                   <div className="relative">
-                    <FiLink
-                      className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
-                      size={17}
-                    />
+                    <FiMail className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
 
                     <input
-                      id="googleUrl"
-                      type="url"
-                      name="googleUrl"
-                      placeholder="https://maps.app.goo.gl/..."
-                      className={inputClass}
-                      value={formData.googleUrl}
-                      onChange={handleInput}
+                      id="email"
+                      name="email"
+                      type="email"
+                      value={formData.email}
+                      onChange={handleChange}
+                      placeholder="you@example.com"
+                      autoComplete="email"
                       required
+                      className="w-full rounded-xl border border-gray-200 bg-white py-3.5 pl-11 pr-4 text-sm outline-none transition focus:border-black focus:ring-2 focus:ring-black/5"
                     />
                   </div>
                 </div>
 
-                {/* Submit */}
+                <div>
+                  <label
+                    htmlFor="password"
+                    className="mb-2 block text-sm font-semibold"
+                  >
+                    Password
+                  </label>
+
+                  <div className="relative">
+                    <FiLock className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+
+                    <input
+                      id="password"
+                      name="password"
+                      type="password"
+                      value={formData.password}
+                      onChange={handleChange}
+                      placeholder="Minimum 8 characters"
+                      autoComplete="new-password"
+                      minLength={8}
+                      required
+                      className="w-full rounded-xl border border-gray-200 bg-white py-3.5 pl-11 pr-4 text-sm outline-none transition focus:border-black focus:ring-2 focus:ring-black/5"
+                    />
+                  </div>
+                </div>
+
                 <button
                   type="submit"
                   disabled={loading}
-                  className="group flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 px-5 py-3.5 text-sm font-bold text-white shadow-lg shadow-indigo-600/20 transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
+                  className="flex w-full items-center justify-center gap-2 rounded-xl bg-black px-5 py-3.5 text-sm font-semibold text-white transition hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   {loading ? (
                     <>
                       <FiLoader className="animate-spin" size={18} />
-                      Submitting request...
+                      Sending OTP...
                     </>
                   ) : (
                     <>
-                      Create account
-                      <FiArrowRight
-                        className="transition-transform group-hover:translate-x-1"
-                        size={18}
-                      />
+                      Continue
+                      <FiArrowRight size={18} />
+                    </>
+                  )}
+                </button>
+              </form>
+            ) : (
+              <form onSubmit={verifyOtp} className="space-y-6">
+                <div>
+                  <label
+                    htmlFor="otp"
+                    className="mb-2 block text-sm font-semibold"
+                  >
+                    6-digit verification code
+                  </label>
+
+                  <input
+                    id="otp"
+                    name="otp"
+                    type="text"
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                    value={otp}
+                    onChange={handleOtpChange}
+                    placeholder="000000"
+                    maxLength={6}
+                    required
+                    autoFocus
+                    className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-4 text-center text-2xl font-bold tracking-[0.5em] outline-none transition focus:border-black focus:bg-white focus:ring-2 focus:ring-black/5"
+                  />
+
+                  <p className="mt-2 text-xs text-gray-500">
+                    Enter the code sent to your email. It may expire after
+                    five minutes.
+                  </p>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={loading || otp.length !== 6}
+                  className="flex w-full items-center justify-center gap-2 rounded-xl bg-black px-5 py-3.5 text-sm font-semibold text-white transition hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {loading ? (
+                    <>
+                      <FiLoader className="animate-spin" size={18} />
+                      Verifying...
+                    </>
+                  ) : (
+                    <>
+                      Verify and create account
+                      <FiArrowRight size={18} />
                     </>
                   )}
                 </button>
 
-                <p className="pb-2 text-center text-xs leading-5 text-slate-400">
-                  Your account request will be processed according to your
-                  platform&apos;s registration workflow.
-                </p>
+                <div className="flex flex-col items-center gap-4 text-sm">
+                  <button
+                    type="button"
+                    onClick={resendOtp}
+                    disabled={countdown > 0 || resending || loading}
+                    className="flex items-center gap-2 font-semibold text-gray-700 transition hover:text-black disabled:cursor-not-allowed disabled:text-gray-400"
+                  >
+                    {resending ? (
+                      <FiLoader className="animate-spin" size={16} />
+                    ) : (
+                      <FiRefreshCw size={16} />
+                    )}
+
+                    {resending
+                      ? "Resending..."
+                      : countdown > 0
+                      ? `Resend OTP in ${countdown}s`
+                      : "Resend OTP"}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setStep(1);
+                      setOtp("");
+                      setError("");
+                      setSuccess("");
+                    }}
+                    className="flex items-center gap-2 text-gray-500 transition hover:text-black"
+                  >
+                    <FiArrowLeft size={16} />
+                    Back to registration
+                  </button>
+                </div>
               </form>
+            )}
 
-              {/* HELP PANEL: sticky on desktop */}
-              <aside className="min-w-0 xl:sticky xl:top-4">
-                {activeHelp ? (
-                  <div className="flex max-h-[calc(100vh-2rem)] min-h-0 flex-col overflow-hidden rounded-2xl border border-indigo-100 bg-slate-50 shadow-sm">
-
-                    {/* Fixed help header */}
-                    <div className="flex shrink-0 items-start justify-between gap-3 border-b border-slate-200 bg-white p-4">
-                      <div>
-                        <div className="mb-2 inline-flex rounded-lg bg-indigo-50 p-2 text-indigo-600">
-                          <IoIosHelpCircle size={21} />
-                        </div>
-
-                        <h2 className="text-sm font-bold text-slate-900">
-                          {activeHelp.title}
-                        </h2>
-
-                        <p className="mt-1 text-xs leading-5 text-slate-500">
-                          {activeHelp.subtitle}
-                        </p>
-                      </div>
-
-                      <button
-                        type="button"
-                        onClick={() => setShowhelp("")}
-                        aria-label="Close help"
-                        className="rounded-lg p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
-                      >
-                        <FiX size={18} />
-                      </button>
-                    </div>
-
-                    {/* Scrollable help content */}
-                    <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
-                      <div className="border-b border-slate-200 bg-white p-3">
-                        <Image
-                          src={activeHelp.image}
-                          alt={activeHelp.title}
-                          width={640}
-                          height={420}
-                          unoptimized
-                          className="h-auto max-h-48 w-full rounded-xl border border-slate-100 object-contain"
-                        />
-                      </div>
-
-                      <div className="p-4">
-                        <a
-                          href={activeHelp.externalLink}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="mb-5 flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-indigo-700"
-                        >
-                          <FiExternalLink size={16} />
-                          {activeHelp.linkText}
-                        </a>
-
-                        <h3 className="mb-4 text-xs font-bold uppercase tracking-wider text-slate-500">
-                          Follow these steps
-                        </h3>
-
-                        <ol className="space-y-4">
-                          {activeHelp.steps.map((step, index) => (
-                            <li
-                              key={step.title}
-                              className="flex items-start gap-3"
-                            >
-                              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-indigo-100 text-xs font-bold text-indigo-700">
-                                {index + 1}
-                              </span>
-
-                              <div className="min-w-0">
-                                <p className="text-xs font-bold text-slate-800">
-                                  {step.title}
-                                </p>
-
-                                <p className="mt-1 text-xs leading-5 text-slate-500">
-                                  {step.description}
-                                </p>
-                              </div>
-                            </li>
-                          ))}
-                        </ol>
-
-                        <div className="mt-5 rounded-xl border border-amber-200 bg-amber-50 p-3">
-                          <p className="text-xs leading-5 text-amber-900">
-                            <strong>Important:</strong> {activeHelp.note}
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="flex min-h-[260px] flex-col justify-center rounded-2xl border border-dashed border-slate-200 bg-slate-50/70 p-6">
-                    <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-indigo-50 text-indigo-600">
-                      <IoIosHelpCircle size={34} />
-                    </div>
-
-                    <h2 className="text-center text-sm font-bold text-slate-800">
-                      Need help with setup?
-                    </h2>
-
-                    <p className="mx-auto mt-2 max-w-xs text-center text-xs leading-5 text-slate-500">
-                      Select the help icon beside either field to view the GIF
-                      and step-by-step instructions.
-                    </p>
-
-                    <div className="mt-5 space-y-2">
-                      <button
-                        type="button"
-                        onClick={() => setShowhelp("placeid")}
-                        className="flex w-full items-center justify-between rounded-xl border border-slate-200 bg-white p-3 text-left text-xs font-semibold text-slate-700 transition hover:border-indigo-300 hover:text-indigo-700"
-                      >
-                        <span className="flex items-center gap-2">
-                          <FiMapPin size={16} />
-                          Find Google Place ID
-                        </span>
-                        <FiArrowRight size={15} />
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => setShowhelp("googleurl")}
-                        className="flex w-full items-center justify-between rounded-xl border border-slate-200 bg-white p-3 text-left text-xs font-semibold text-slate-700 transition hover:border-indigo-300 hover:text-indigo-700"
-                      >
-                        <span className="flex items-center gap-2">
-                          <FiLink size={16} />
-                          Get Google business URL
-                        </span>
-                        <FiArrowRight size={15} />
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </aside>
-            </div>
+            <p className="mt-8 text-center text-xs leading-5 text-gray-400">
+              By continuing, you agree to our Terms of Service and Privacy
+              Policy.
+            </p>
           </div>
-        </main>
+        </section>
       </div>
-    </div>
+    </main>
   );
-};
-
-export default Page;
+}

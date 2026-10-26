@@ -15,14 +15,15 @@ const ClientSchema = new mongoose.Schema(
       select: false,
     },
     businessName: { type: String, required: true },
-    placeId: { type: String, required: true },
-    googleUrl: { type: String, required: true },
+    placeId: { type: String,  },
+    googleUrl: { type: String, },
     hasGeneratedQr: { type: Boolean, default: false },
     savedQrUrl: { type: String, default: "" },
     expiryDate: { type: Date, required: true },
   },
   { timestamps: true }
 );
+
 
 export default mongoose.models.Client ||
   mongoose.model("Client", ClientSchema);

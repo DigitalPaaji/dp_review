@@ -76,7 +76,7 @@ export async function POST(req) {
       admin.passwordHash
     );
 
-    console.log("[ADMIN LOGIN] Password valid:", passwordIsValid);
+
 
     if (!passwordIsValid) {
       return NextResponse.json(
