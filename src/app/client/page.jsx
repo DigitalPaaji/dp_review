@@ -1,0 +1,740 @@
+"use client";
+
+import axios from "axios";
+import React, { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { QRCodeSVG } from "qrcode.react";
+import {
+  FiMapPin,
+  FiBriefcase,
+  FiTool,
+  FiFileText,
+  FiZap,
+  FiLoader,
+  FiCopy,
+  FiDownload,
+  FiCheck,
+  FiExternalLink,
+  FiRefreshCw,
+  FiShield,
+  FiClock,
+  FiAlertCircle,
+  FiStar,
+} from "react-icons/fi";
+
+axios.defaults.withCredentials = true;
+
+export default function Page() {
+  const [currentClient, setCurrentClient] = useState(null);
+  const [pageLoading, setPageLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [error, setError] = useState("");
+  const router = useRouter();
+  const [bgColor,setBgcolor]=useState("#ffffff")
+  const [fgColor,setfgColorr]=useState("#000000")
+
+
+
+
+  useEffect(() => {
+    const getData = async () => {
+      try {
+        const response = await axios.get("/api/clients");
+        const data = response.data;
+
+        if (data.success && data.client) {
+          setCurrentClient(data.client);
+        } else {
+          setError(data.message || "Unable to load your business details.");
+        }
+      } catch (err) {
+        setError(
+          err.response?.data?.message ||
+            "Unable to load your account. Please try again."
+        );
+      } finally {
+        setPageLoading(false);
+      }
+    };
+
+    getData();
+  }, []);
+
+  const handleClientGenerateQr = async (
+    location,
+    industry,
+    services,
+    description
+  ) => {
+    if (!currentClient || saving) return;
+
+    setError("");
+    setSaving(true);
+
+    try {
+      const expiryTimestamp = new Date(currentClient.expiryDate).getTime();
+
+      if (!Number.isFinite(expiryTimestamp)) {
+        throw new Error("Your account expiry date is invalid.");
+      }
+
+      const params = new URLSearchParams({
+        business: currentClient.businessName || "",
+        location,
+        industry,
+        services,
+        desc: description,
+        placeid: currentClient.placeId || "",
+        googleurl: currentClient.googleUrl || "",
+        expires: String(expiryTimestamp),
+      });
+
+      const url = `${window.location.origin}/review?${params.toString()}`;
+
+      const response = await axios.put("/api/clients", {
+        id: currentClient._id,
+        hasGeneratedQr: true,
+        savedQrUrl: url,
+      });
+
+      if (response.data.success) {
+        setCurrentClient(response.data.client);
+      } else {
+        setError(response.data.message || "Failed to generate your QR code.");
+      }
+    } catch (err) {
+      setError(
+        err.response?.data?.message ||
+          err.message ||
+          "Something went wrong while generating your QR code."
+      );
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const copyLink = async () => {
+    if (!currentClient?.savedQrUrl) return;
+
+    try {
+      await navigator.clipboard.writeText(currentClient.savedQrUrl);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      setError("Could not copy the link. Please copy the URL manually.");
+    }
+  };
+
+ 
+const downloadQr = async () => {
+  const svg = document.getElementById("client-review-qr");
+
+  if (!svg || !currentClient?.savedQrUrl) {
+    setError("QR code is not available.");
+    return;
+  }
+
+  let svgUrl;
+  let pngUrl;
+
+  try {
+    setError("");
+
+    const clonedSvg = svg.cloneNode(true);
+
+    clonedSvg.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+    clonedSvg.setAttribute("width", "800");
+    clonedSvg.setAttribute("height", "800");
+
+    // Embed the center logo inside the SVG.
+    const images = clonedSvg.querySelectorAll("image");
+
+    for (const img of images) {
+      const src =
+        img.getAttribute("href") ||
+        img.getAttributeNS(
+          "http://www.w3.org/1999/xlink",
+          "href"
+        );
+
+      if (!src || src.startsWith("data:")) continue;
+
+      const response = await fetch(
+        new URL(src, window.location.href).href
+      );
+
+      if (!response.ok) {
+        throw new Error("Unable to load the QR logo.");
+      }
+
+      const blob = await response.blob();
+
+      const dataUrl = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = () => reject(new Error("Logo conversion failed."));
+        reader.readAsDataURL(blob);
+      });
+
+      img.setAttribute("href", dataUrl);
+      img.setAttributeNS(
+        "http://www.w3.org/1999/xlink",
+        "xlink:href",
+        dataUrl
+      );
+    }
+
+    const svgBlob = new Blob(
+      [new XMLSerializer().serializeToString(clonedSvg)],
+      { type: "image/svg+xml;charset=utf-8" }
+    );
+
+    svgUrl = URL.createObjectURL(svgBlob);
+
+    // Load SVG into an image.
+    const image = new Image();
+
+    await new Promise((resolve, reject) => {
+      image.onload = resolve;
+      image.onerror = () => reject(new Error("Unable to render QR code."));
+      image.src = svgUrl;
+    });
+
+    const canvas = document.createElement("canvas");
+    canvas.width = 800;
+    canvas.height = 800;
+
+    const ctx = canvas.getContext("2d");
+
+    if (!ctx) {
+      throw new Error("Unable to create canvas.");
+    }
+
+    // Selected background color.
+    ctx.fillStyle = bgColor || "#ffffff";
+    ctx.fillRect(0, 0, 800, 800);
+
+    // Render QR and center logo.
+    ctx.drawImage(image, 0, 0, 800, 800);
+
+    const pngBlob = await new Promise((resolve, reject) => {
+      canvas.toBlob(
+        (blob) => {
+          if (blob) resolve(blob);
+          else reject(new Error("PNG generation failed."));
+        },
+        "image/png"
+      );
+    });
+
+    pngUrl = URL.createObjectURL(pngBlob);
+
+    const safeName =
+      (currentClient.businessName || "business")
+        .trim()
+        .replace(/[^a-z0-9]+/gi, "-")
+        .replace(/^-|-$/g, "") || "business";
+
+    const anchor = document.createElement("a");
+    anchor.href = pngUrl;
+    anchor.download = `${safeName}-review-qr.png`;
+
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+
+    // Do not revoke immediately; give the browser time to start downloading.
+    setTimeout(() => {
+      if (pngUrl) URL.revokeObjectURL(pngUrl);
+    }, 2000);
+  } catch (error) {
+    console.error("QR download failed:", error);
+
+    setError(
+      error instanceof Error
+        ? error.message
+        : "Unable to download QR image."
+    );
+  } finally {
+    if (svgUrl) URL.revokeObjectURL(svgUrl);
+  }
+};
+
+const handelLogout =async()=>{
+  try {
+const response = await axios.post("/api/auth/logout")
+const data = await response.data;
+if(data.success){
+location.href="/"
+}
+else{
+  setError(data.message)
+}
+
+} catch (error) {
+    setError(error?.response?.data?.message)  
+  }
+}
+
+
+  if (pageLoading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-gray-50">
+        <div className="flex flex-col items-center gap-3">
+          <FiLoader className="animate-spin text-gray-800" size={32} />
+          <p className="text-sm text-gray-500">Loading your dashboard...</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <main className="h-screen overflow-auto bg-[#f7f8fa] text-gray-900">
+      <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
+        {/* Header */}
+        <header className="mb-8 flex flex-col justify-between gap-5 rounded-3xl bg-[#151515] p-6 text-white shadow-lg sm:flex-row sm:items-center sm:p-8">
+          <div>
+            <div className="mb-3 flex items-center gap-2 text-sm text-gray-300">
+              <FiStar className="text-amber-400" />
+              Business dashboard
+            </div>
+
+            <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">
+              Review QR Code
+            </h1>
+
+            <p className="mt-2 max-w-xl text-sm leading-6 text-gray-300">
+              Help customers reach your review page instantly. Display your QR
+              code at your counter, on packaging, or on printed materials.
+            </p>
+          </div>
+
+          <button onClick={handelLogout} className="flex cursor-pointer  px-4 py-2 shrink-0 items-center justify-center self-start rounded-2xl border border-white/10 bg-white/10 sm:self-center">
+           logout
+            
+          </button>
+        </header>
+
+        {error && (
+          <div
+            role="alert"
+            className="mb-6 flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700"
+          >
+            <FiAlertCircle size={19} className="mt-0.5 shrink-0" />
+            <p>{error}</p>
+          </div>
+        )}
+
+        {currentClient?.hasGeneratedQr && currentClient?.savedQrUrl ? (
+          <div className="space-y-6">
+            {/* Status and business */}
+            <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm sm:p-6">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex items-center gap-4">
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-emerald-700">
+                    <FiBriefcase size={23} />
+                  </div>
+
+                  <div>
+                    <h2 className="text-lg font-bold">
+                      {currentClient.businessName}
+                    </h2>
+                    <p className="mt-1 text-sm text-gray-500">
+                      {currentClient.email}
+                    </p>
+                  </div>
+                </div>
+
+                <span className="inline-flex w-fit items-center gap-2 rounded-full bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700">
+                  <FiCheck size={15} />
+                  QR Code Generated
+                </span>
+              </div>
+            </section>
+
+            {/* QR and actions */}
+            <section className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
+              <div className="border-b border-gray-100 px-5 py-5 sm:px-7">
+                <h2 className="text-lg font-bold">Your review QR code</h2>
+                <p className="mt-1 text-sm text-gray-500">
+                  Scan to open your personalized review page.
+                </p>
+              </div>
+
+              <div className="grid gap-8 p-5 sm:p-7 lg:grid-cols-[280px_minmax(0,1fr)] lg:items-center">
+                {/* QR preview */}
+                <div className="flex flex-col items-center rounded-2xl border border-gray-100 bg-gray-50 p-5">
+               
+                  <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
+                    <QRCodeSVG
+  id="client-review-qr"
+  value={currentClient.savedQrUrl}
+  title={"Title for my QR Code"}
+  size={228}
+  bgColor={bgColor}
+  fgColor={fgColor}
+  level={"L"}
+  minVersion={5}
+  imageSettings={{
+    src: "/logo2.webp",
+     x: undefined,
+    y: undefined,
+    height: 50,
+    width:50,
+    opacity: 1,
+    excavate: true,
+  }}
+/>
+         
+         
+      
+                  </div>
+                  
+
+                  <p className="mt-4 text-sm font-semibold text-gray-800">
+                    {currentClient.businessName}
+                  </p>
+                  <p className="mt-1 text-xs text-gray-500">
+                    Scan to leave a review
+                  </p>
+
+                  <button
+                    type="button"
+                    onClick={downloadQr}
+                    className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-gray-900 px-4 py-3 text-sm font-semibold text-white transition hover:bg-gray-700"
+                  >
+                    <FiDownload size={17} />
+                    Download QR as PNG
+                  </button>
+                </div>
+
+                {/* Link and actions */}
+                <div className="min-w-0">
+                  <div  className="flex justify-between items-center">
+                  <div className="mb-5">
+                    <h3 className="text-base font-bold">Share your QR link</h3>
+                    <p className="mt-1 text-sm leading-6 text-gray-500">
+                      Copy the link to share digitally, or open it to check
+                      your review page.
+                    </p>
+                  </div>
+   <div className="flex ">
+                   <input type="color" value={bgColor} onChange={(e)=>setBgcolor(e.target.value)} />  
+                   <input type="color" value={fgColor} onChange={(e)=>setfgColorr(e.target.value)} />  
+                    <button onClick={()=>{setBgcolor("#ffffff"),setfgColorr("#000000")}} >Reset</button>
+
+                   </div>
+
+                   </div>
+                  <div className="rounded-xl border border-gray-200 bg-gray-50 p-3 sm:p-4">
+                    <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-gray-500">
+                      Your review URL
+                    </p>
+
+                    <p className="break-all text-sm leading-6 text-gray-800">
+                      {currentClient.savedQrUrl}
+                    </p>
+
+                    <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+                      <button
+                        type="button"
+                        onClick={copyLink}
+                        className={`inline-flex flex-1 items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-semibold transition ${
+                          copied
+                            ? "bg-emerald-600 text-white"
+                            : "bg-gray-900 text-white hover:bg-gray-700"
+                        }`}
+                      >
+                        {copied ? (
+                          <FiCheck size={17} />
+                        ) : (
+                          <FiCopy size={17} />
+                        )}
+                        {copied ? "Link Copied!" : "Copy Link"}
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() =>
+                          window.open(
+                            currentClient.savedQrUrl,
+                            "_blank",
+                            "noopener,noreferrer"
+                          )
+                        }
+                        className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm font-semibold text-gray-700 transition hover:bg-gray-100"
+                      >
+                        <FiExternalLink size={17} />
+                        Open Review Page
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="mt-5 grid gap-3 sm:grid-cols-2">
+                    <div className="flex items-start gap-3 rounded-xl border border-gray-100 p-4">
+                      <FiShield className="mt-0.5 shrink-0 text-emerald-600" size={19} />
+                      <div>
+                        <p className="text-sm font-semibold">Easy to share</p>
+                        <p className="mt-1 text-xs leading-5 text-gray-500">
+                          Print it or share your link with customers.
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-start gap-3 rounded-xl border border-gray-100 p-4">
+                      <FiClock className="mt-0.5 shrink-0 text-gray-500" size={19} />
+                      <div>
+                        <p className="text-sm font-semibold">Account expiry</p>
+                        <p className="mt-1 text-xs leading-5 text-gray-500">
+                          {currentClient.expiryDate
+                            ? new Date(
+                                currentClient.expiryDate
+                              ).toLocaleDateString("en-IN", {
+                                day: "numeric",
+                                month: "short",
+                                year: "numeric",
+                              })
+                            : "Not specified"}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </section>
+          </div>
+        ) : currentClient ? (
+          <GenrateYouQr
+            handleClientGenerateQr={handleClientGenerateQr}
+            loading={saving}
+          />
+        ) : (
+          <div className="rounded-2xl border border-gray-200 bg-white px-6 py-16 text-center shadow-sm">
+            <FiAlertCircle className="mx-auto mb-4 text-gray-400" size={36} />
+            <h2 className="text-lg font-bold">Business details unavailable</h2>
+            <p className="mt-2 text-sm text-gray-500">
+              We could not find your client details. Please try again.
+            </p>
+            <button
+              type="button"
+              onClick={() => router.refresh()}
+              className="mt-5 rounded-xl bg-gray-900 px-5 py-3 text-sm font-semibold text-white hover:bg-gray-700"
+            >
+              Refresh page
+            </button>
+          </div>
+        )}
+      </div>
+    </main>
+  );
+}
+
+
+
+
+function GenrateYouQr({ handleClientGenerateQr, loading }) {
+  const [newData, setNewData] = useState({
+    location: "",
+    industry: "",
+    services: "",
+    description: "",
+  });
+
+  const [formError, setFormError] = useState("");
+
+  const fields = [
+    {
+      name: "location",
+      label: "Business location",
+      placeholder: "e.g. Ludhiana, Punjab",
+      icon: FiMapPin,
+      required: true,
+    },
+    {
+      name: "industry",
+      label: "Industry",
+      placeholder: "e.g. Restaurant, Salon, Hotel",
+      icon: FiBriefcase,
+      required: true,
+    },
+    {
+      name: "services",
+      label: "Services",
+      placeholder: "e.g. Dining, Catering, Home Delivery",
+      icon: FiTool,
+      required: true,
+    },
+  ];
+
+  const handleChange = (e) => {
+    setNewData((prev) => ({
+      ...prev,
+      [e.target.name]: e.target.value,
+    }));
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setFormError("");
+
+    if (
+      !newData.location.trim() ||
+      !newData.industry.trim() ||
+      !newData.services.trim()
+    ) {
+      setFormError("Please fill in all required fields.");
+      return;
+    }
+
+    await handleClientGenerateQr(
+      newData.location.trim(),
+      newData.industry.trim(),
+      newData.services.trim(),
+      newData.description.trim()
+    );
+  };
+
+  return (
+    <section className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
+      <div className="border-b border-gray-100 px-5 py-6 sm:px-8">
+        <div className="flex items-center gap-3">
+          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gray-900 text-white">
+            <FiZap size={22} />
+          </div>
+          <div>
+            <h2 className="text-lg font-bold">Set up your review QR</h2>
+            <p className="mt-1 text-sm text-gray-500">
+              Personalize the page your customers will see.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <form onSubmit={handleSubmit}>
+        <div className="grid gap-6 p-5 sm:p-8 md:grid-cols-2">
+          <div className="space-y-5">
+            {fields.map((field) => {
+              const Icon = field.icon;
+
+              return (
+                <div key={field.name}>
+                  <label
+                    htmlFor={field.name}
+                    className="mb-2 block text-sm font-semibold text-gray-700"
+                  >
+                    {field.label}
+                    {field.required && (
+                      <span className="ml-1 text-red-500">*</span>
+                    )}
+                  </label>
+
+                  <div className="relative">
+                    <Icon
+                      size={18}
+                      className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400"
+                    />
+                    <input
+                      id={field.name}
+                      name={field.name}
+                      value={newData[field.name]}
+                      onChange={handleChange}
+                      placeholder={field.placeholder}
+                      required={field.required}
+                      disabled={loading}
+                      className="w-full rounded-xl border border-gray-200 bg-gray-50 py-3.5 pl-11 pr-4 text-sm outline-none transition placeholder:text-gray-400 focus:border-gray-900 focus:bg-white focus:ring-2 focus:ring-gray-900/5 disabled:opacity-60"
+                    />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          <div>
+            <label
+              htmlFor="description"
+              className="mb-2 block text-sm font-semibold text-gray-700"
+            >
+              Business description
+              <span className="ml-1 font-normal text-gray-400">
+                (Optional)
+              </span>
+            </label>
+
+            <div className="relative">
+              <FiFileText
+                size={18}
+                className="absolute left-3.5 top-4 text-gray-400"
+              />
+              <textarea
+                id="description"
+                name="description"
+                value={newData.description}
+                onChange={handleChange}
+                placeholder="Tell customers about your business, what makes it special, and what services you provide..."
+                rows={8}
+                maxLength={500}
+                disabled={loading}
+                className="w-full resize-y rounded-xl border border-gray-200 bg-gray-50 py-3.5 pl-11 pr-4 text-sm leading-6 outline-none transition placeholder:text-gray-400 focus:border-gray-900 focus:bg-white focus:ring-2 focus:ring-gray-900/5 disabled:opacity-60"
+              />
+            </div>
+
+            <p className="mt-2 text-right text-xs text-gray-400">
+              {newData.description.length}/500 characters
+            </p>
+
+            <div className="mt-5 rounded-xl border border-amber-100 bg-amber-50 p-4">
+              <div className="flex gap-3">
+                <FiShield className="mt-0.5 shrink-0 text-amber-700" size={18} />
+                <div>
+                  <p className="text-sm font-semibold text-gray-800">
+                    Keep your QR accessible
+                  </p>
+                  <p className="mt-1 text-xs leading-5 text-gray-600">
+                    After generating the QR code, download and save the image
+                    so you can print it whenever you need it.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {formError && (
+          <p className="mx-5 mb-4 text-sm text-red-600 sm:mx-8">
+            {formError}
+          </p>
+        )}
+
+        <div className="flex flex-col gap-3 border-t border-gray-100 bg-gray-50/70 px-5 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-8">
+          <p className="text-xs text-gray-500">
+            Fields marked with * are required.
+          </p>
+
+          <button
+            type="submit"
+            disabled={
+              loading ||
+              !newData.location.trim() ||
+              !newData.industry.trim() ||
+              !newData.services.trim()
+            }
+            className="inline-flex items-center justify-center gap-2 rounded-xl bg-gray-900 px-6 py-3.5 text-sm font-semibold text-white transition hover:bg-gray-700 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {loading ? (
+              <>
+                <FiLoader className="animate-spin" size={17} />
+                Generating QR...
+              </>
+            ) : (
+              <>
+                <FiZap size={17} />
+                Generate QR Code
+              </>
+            )}
+          </button>
+        </div>
+      </form>
+    </section>
+  );
+}
