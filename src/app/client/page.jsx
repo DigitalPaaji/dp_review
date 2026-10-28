@@ -71,6 +71,8 @@ export default function Page() {
     services,
     description
   ) => {
+
+  
     if (!currentClient || saving) return;
 
     setError("");
@@ -89,13 +91,15 @@ export default function Page() {
         industry,
         services,
         desc: description,
-        placeid: currentClient.placeId || "",
-        googleurl: currentClient.googleUrl || "",
+        placeid: placeId || "",
+        googleurl: googleUrl || "",
         expires: String(expiryTimestamp),
       });
 
       const url = `${window.location.origin}/review?${params.toString()}`;
+  console.log({ params,url})
 
+    // return 
       const response = await axios.put("/api/clients", {
         id: currentClient._id,
         hasGeneratedQr: true,

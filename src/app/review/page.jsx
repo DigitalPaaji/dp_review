@@ -41,7 +41,7 @@ function ReviewContent() {
   const placeId = searchParams.get("placeid") || "ChIJj7dpzeIpEDkRFA_89AlSWzk";
   const services = searchParams.get("services") || "";
   const industry = searchParams.get("industry") || "";
-  const customerExperience = searchParams.get("experience") || "";
+  // const customerExperience = searchParams.get("experience") || "";
   const expiryTimestamp = searchParams.get("expires");
 
   const googleReviewUrl = `https://search.google.com/local/writereview?placeid=${placeId}`;
@@ -86,7 +86,7 @@ function ReviewContent() {
           description,
           services,
           industry,
-          customerExperience,
+          // customerExperience,
           stars: selectedStars
         }),
       });
