@@ -157,7 +157,7 @@ const downloadQr = async () => {
     clonedSvg.setAttribute("width", "800");
     clonedSvg.setAttribute("height", "800");
 
-    // Embed the center logo inside the SVG.
+   
     const images = clonedSvg.querySelectorAll("image");
 
     for (const img of images) {
@@ -203,8 +203,8 @@ const downloadQr = async () => {
     svgUrl = URL.createObjectURL(svgBlob);
 
     // Load SVG into an image.
-    const image = new Image();
-
+    const image = new window.Image();
+    
     await new Promise((resolve, reject) => {
       image.onload = resolve;
       image.onerror = () => reject(new Error("Unable to render QR code."));
