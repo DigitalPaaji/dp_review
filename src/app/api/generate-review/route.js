@@ -93,43 +93,25 @@ export async function POST(req) {
     // }
 // Customer's actual experience: ${customerExperience}
   
-const prompt = `
-Generate exactly 5 complete, natural-sounding customer review drafts.
+ const prompt = `
+Generate exactly 5 suggested review  for  customer 
 
-Business name: ${businessName}
-Location: ${location || "Not provided"}
-Industry: ${industry || "Not provided"}
-Business description: ${description || "Not provided"}
-Services: ${services || "Not provided"}
+Business: ${businessName.trim()}
+Location: ${location || "Not specified"}
+Industry: ${industry || "Not specified"}
+Description: ${description || "Not specified"}
+Services: ${services || "Not specified"}
 
-Requested rating: ${rating}/5 stars
+Requested rating: ${rating}/5
 
-Return ONLY a valid JSON object:
-{
-  "reviews": [
-    "First complete review",
-    "Second complete review",
-    "Third complete review",
-    "Fourth complete review",
-    "Fifth complete review"
-  ]
-}
-
-STRICT RULES:
-- Generate exactly 5 complete reviews.
-- Each review should contain 25-50 words.
-- Write fluent, natural English that sounds like a real customer.
-- Never use placeholders such as [dish], [item], [detail], or fill-in instructions.
-
-- Do not ask the customer to complete or edit missing details.
-
-- Use the business name naturally, without unnecessarily repeating its location.
-
-- Make all five reviews meaningfully different.
-- Match the requested rating without exaggeration.
-- Return valid JSON only, with no markdown or additional text.
+Write natural, distinct  that match the rating.
+Do not invent visits, transactions, employees, or specific events.
+Keep each draft around 30–70 words.
+Return only JSON in this format:
+{"reviews":["draft 1","draft 2","draft 3","draft 4","draft 5"]}
 `;
-const systemPrompt = `You are an everyday customer writing quick, authentic reviews on Google Maps. Write exactly how real people talk online: casual, direct, and conversational. Never use corporate buzzwords or PR speak. Always return raw, valid JSON only.`;
+
+const systemPrompt = `You are a real customer writing quick, authentic reviews on Google Maps. Write exactly how everyday people post from their phones: natural, direct, and conversational. Never use corporate marketing buzzwords or AI fluff. Output raw, valid JSON only without markdown formatting.`;
 
 
 const userPrompt = `
@@ -179,14 +161,17 @@ RULES FOR REAL-LOOKING USER REVIEWS:
 
     try {
       response = await openai.chat.completions.create({
+        
         model: process.env.OPENAI_MODEL || "gpt-4o-mini",
+       
+
         messages: [
-          {
-            role: "system",
-            content:systemPrompt      },
+          // {
+          //   role: "system",
+          //   content:systemPrompt      },
           {
             role: "user",
-            content: userPrompt,
+            content: prompt,
           },
         ],
      

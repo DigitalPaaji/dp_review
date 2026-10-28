@@ -1,9 +1,8 @@
-'use client';
-import React, { useState, useEffect, Suspense } from "react";
+
+"use client";
+
+import React, { Suspense, useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
-
-
-
 
 const reviewSlides = [
   {
@@ -12,353 +11,571 @@ const reviewSlides = [
     name: "Rohan Verma",
     role: "Regular Patron",
     avatar: "RV",
-    comment: '“The AI review generator QR code made sharing feedback effortless! Our Google reviews spiked by 300% in just two weeks.”'
+    comment:
+      "The review portal makes sharing feedback simple and convenient. The QR-based process is quick and easy to use.",
   },
   {
     business: "Elite Salon & Spa",
     industry: "Beauty & Wellness",
     name: "Priya Sharma",
-    role: "Verified Client",
+    role: "Client Experience",
     avatar: "PS",
-    comment: "“Amazing experience! Customers just scan the QR code at the desk and our custom AI prompt instantly creates a glowing review.”"
+    comment:
+      "A clean and convenient way for customers to access a business's review page and share their feedback.",
   },
   {
     business: "Patiala Gourmet Sweets",
     industry: "Food & Bakery",
     name: "Harpreet Singh",
-    role: "Food Blogger",
+    role: "Customer Experience",
     avatar: "HS",
-    comment: "“Digital Paaji's smart review portal is a game changer for local businesses. Seamless, fast, and extremely professional!”"
-  }
+    comment:
+      "The review portal offers a straightforward experience with a professional design and an easy-to-follow process.",
+  },
 ];
 
 function ReviewContent() {
   const searchParams = useSearchParams();
-  
+
   const businessName = searchParams.get("business") || "Local Business";
   const location = searchParams.get("location") || "";
   const description = searchParams.get("desc") || "";
-  const placeId = searchParams.get("placeid") || "ChIJj7dpzeIpEDkRFA_89AlSWzk";
+  const placeId = searchParams.get("placeid") || "";
   const services = searchParams.get("services") || "";
   const industry = searchParams.get("industry") || "";
-  // const customerExperience = searchParams.get("experience") || "";
   const expiryTimestamp = searchParams.get("expires");
 
-  const googleReviewUrl = `https://search.google.com/local/writereview?placeid=${placeId}`;
+  const googleReviewUrl = placeId
+    ? `https://search.google.com/local/writereview?placeid=${encodeURIComponent(
+        placeId
+      )}`
+    : "";
 
   const [stars, setStars] = useState(5);
   const [reviewsList, setReviewsList] = useState([]);
   const [selectedReview, setSelectedReview] = useState("");
   const [loading, setLoading] = useState(false);
-  const [toast, setToast] = useState(false);
+  const [toast, setToast] = useState("");
+  const [apiError, setApiError] = useState("");
   const [activeSlide, setActiveSlide] = useState(0);
-  const [isExpired, setIsExpired] = useState(false);
 
-  // Check 1-year validity expiration
+  const [isExpired, setIsExpired] = useState(() => {
+    if (!expiryTimestamp) return false;
+
+    const expiry = Number(expiryTimestamp);
+
+    return !Number.isFinite(expiry) || Date.now() > expiry;
+  });
+
   useEffect(() => {
-    if (expiryTimestamp) {
-      const currentTime = Date.now();
-      if (currentTime > Number(expiryTimestamp)) {
-        setIsExpired(true);
-      }
+    if (!expiryTimestamp) {
+      setIsExpired(false);
+      return;
     }
+
+    const expiry = Number(expiryTimestamp);
+
+    setIsExpired(
+      !Number.isFinite(expiry) || Date.now() > expiry
+    );
   }, [expiryTimestamp]);
 
-  // Auto rotate review slides every 4 seconds
   useEffect(() => {
-    const timer = setInterval(() => {
-      setActiveSlide((prev) => (prev + 1) % reviewSlides.length);
+    const timer = window.setInterval(() => {
+      setActiveSlide((previous) => (previous + 1) % reviewSlides.length);
     }, 4000);
-    return () => clearInterval(timer);
+
+    return () => window.clearInterval(timer);
   }, []);
 
-  // Fetch 5 dynamic options from Gemini API based on business context
-  const fetchAiReviews = async (selectedStars) => {
-    if (isExpired) return;
-    setLoading(true);
-    try {
-      const res = await fetch("/api/generate-review", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ 
-          businessName, 
-          location,
-          description,
-          services,
-          industry,
-          // customerExperience,
-          stars: selectedStars
-        }),
-      });
-      const data = await res.json();
+  const fetchAiReviews = useCallback(
+    async (selectedStars) => {
+      if (isExpired) return;
 
+      setLoading(true);
+      setApiError("");
+      setReviewsList([]);
+      setSelectedReview("");
 
-      if (!res.ok) {
-  throw new Error(data.details || data.error || `Request failed: ${res.status}`);
-}
+      try {
+        const response = await fetch("/api/generate-review", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            businessName,
+            location,
+            description,
+            services,
+            industry,
+            stars: selectedStars,
+          }),
+        });
 
-if (Array.isArray(data.reviews) && data.reviews.length > 0) {
-  setReviewsList(data.reviews);
-  setSelectedReview(data.reviews[0]);
+        const data = await response.json().catch(() => ({}));
 
-  if (data.source === "fallback") {
-    console.warn("Using fallback reviews:", data.warning);
-  }
-} else {
-  throw new Error("No reviews were returned by the API.");
-}
+        if (!response.ok) {
+          throw new Error(
+            data.details ||
+              data.error ||
+              `Unable to generate reviews (${response.status}).`
+          );
+        }
 
-      // if (data.reviews && data.reviews.length > 0) {
-      //   setReviewsList(data.reviews);
-      //   setSelectedReview(data.reviews[0]);
-      // }
-    } catch (err) {
-      console.error(err);
-      const fallback = ["Great service and wonderful experience overall! Highly recommended."];
-      setReviewsList(fallback);
-      setSelectedReview(fallback[0]);
-    } finally {
-      setLoading(false);
-    }
-  };
+        if (!Array.isArray(data.reviews) || data.reviews.length === 0) {
+          throw new Error("The AI did not return any review suggestions.");
+        }
+
+        const validReviews = data.reviews.filter(
+          (review) =>
+            typeof review === "string" && review.trim().length > 0
+        );
+
+        if (validReviews.length === 0) {
+          throw new Error("No valid review suggestions were returned.");
+        }
+
+        setReviewsList(validReviews);
+        setSelectedReview(validReviews[0]);
+      } catch (error) {
+        console.error("Review generation error:", error);
+
+        setApiError(
+          error instanceof Error
+            ? error.message
+            : "Something went wrong. Please try again."
+        );
+      } finally {
+        setLoading(false);
+      }
+    },
+    [
+      isExpired,
+      businessName,
+      location,
+      description,
+      services,
+      industry,
+    ]
+  );
 
   useEffect(() => {
     if (!isExpired) {
       fetchAiReviews(stars);
     }
-  }, [stars, isExpired]);
+  }, [stars, isExpired, fetchAiReviews]);
 
-  const handleCopyAndOpen = async (textToPost) => {
-    const text = textToPost || selectedReview;
-    if (!text || isExpired) return;
+  const handleCopyAndOpen = async () => {
+    if (!selectedReview || isExpired) return;
+
+    if (!googleReviewUrl) {
+      setToast("Google Place ID is missing.");
+      window.setTimeout(() => setToast(""), 3000);
+      return;
+    }
 
     try {
-      await navigator.clipboard.writeText(text);
-      setToast(true);
-      setTimeout(() => setToast(false), 2500);
+      await navigator.clipboard.writeText(selectedReview);
 
-      if (googleReviewUrl) {
-        window.open(googleReviewUrl, "_blank");
-      }
+      setToast("Review copied! Opening Google...");
+      window.setTimeout(() => setToast(""), 3000);
+
+      window.open(googleReviewUrl, "_blank", "noopener,noreferrer");
     } catch (error) {
-      console.error("Copy error:", error);
-      if (googleReviewUrl) {
-        window.open(googleReviewUrl, "_blank");
-      }
+      console.error("Clipboard error:", error);
+
+      setToast("Could not copy automatically. Please copy your review manually.");
+      window.setTimeout(() => setToast(""), 4000);
     }
   };
 
   const currentReview = reviewSlides[activeSlide];
 
   return (
-    <div className="w-screen overflow-hidden flex flex-col lg:flex-row font-sans bg-[#090D16] text-slate-100 selection:bg-indigo-500 selection:text-white">
-      
-      {/* LEFT SIDE: Image Background with Dark Overlay & Rotating Review Slides (Compact on mobile) */}
-      <div className="flex lg:w-1/2 h-[20vh] lg:h-screen relative bg-[#060911] p-4 lg:p-10 flex-col justify-between overflow-hidden border-b lg:border-b-0 lg:border-r border-indigo-500/20">
-        
-        {/* Background Image with Dark Overlay */}
-        <div 
-          className="absolute inset-0 bg-cover bg-center pointer-events-none" 
-          style={{ backgroundImage: `url('/admin.webp')` }}
-        ></div>
-        <div className="absolute inset-0 bg-gradient-to-br from-[#060911]/60 via-[#090D16]/45 to-[#060911]/25 pointer-events-none"></div>
+    <main className="flex h-dvh min-h-0 w-full flex-col overflow-hidden bg-[#090D16] font-sans text-slate-100 selection:bg-indigo-500 selection:text-white lg:flex-row">
+      {/* LEFT PANEL */}
+      <aside className="relative flex h-[20dvh] min-h-[100px] shrink-0 flex-col overflow-hidden border-b border-indigo-500/20 bg-[#060911] p-3 sm:p-4 lg:h-dvh lg:w-1/2 lg:min-h-0 lg:justify-between lg:border-b-0 lg:border-r lg:p-8 xl:p-10">
+        <div
+          className="pointer-events-none absolute inset-0 bg-cover bg-center opacity-60"
+          style={{ backgroundImage: "url('/admin.webp')" }}
+        />
 
-        {/* Top / Center Aesthetic Content & Rotating Slides */}
-        <div className="relative z-10 my-auto py-2 lg:py-6 flex flex-col items-center text-center">
-          <div className="flex items-center">
-            <img src="/logo.webp" className="w-full h-14 lg:h-20 object-contain" alt="Digital Paaji Logo" />
+        <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-[#060911]/80 via-[#090D16]/70 to-[#060911]/60" />
+
+        <div className="relative z-10 flex items-center justify-center lg:justify-start">
+          <img
+            src="/logo.webp"
+            alt="Digital Paaji"
+            className="h-10 max-w-[180px] object-contain sm:h-12 lg:h-16 lg:max-w-[230px]"
+          />
+        </div>
+
+        {/* Desktop testimonial section */}
+        <div className="relative z-10 hidden w-full max-w-xl self-center lg:block">
+          <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-indigo-400/30 bg-indigo-500/10 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-indigo-300">
+            <span className="h-1.5 w-1.5 rounded-full bg-indigo-400" />
+            Smart review portal
           </div>
-      
-          <h2 className="hidden lg:block text-3xl xl:text-4xl font-light text-slate-100 mt-6">
-            What <span className="font-serif italic font-normal text-indigo-400 underline decoration-indigo-500/50 underline-offset-8">clients</span>
-          </h2>
-          <p className="hidden lg:block text-xs uppercase tracking-widest text-slate-300 font-semibold mb-8">say across all businesses</p>
-          
-          <div className="hidden lg:inline-block mb-6 px-3.5 py-1 bg-indigo-500/20 border border-indigo-500/30 text-indigo-300 text-xs font-semibold tracking-wide">
-            UNIVERSAL BUSINESS REVIEW PORTAL
-          </div>
-          
-          {/* Glassmorphic Rotating Slide Card (Hidden or miniaturized on very small screens if preferred, shown here nicely scaled) */}
-          <div className="relative w-full max-w-md mx-auto transition-all duration-700 hidden sm:block">
-            <div className="absolute inset-x-4 -bottom-5 h-20 bg-slate-900/40 rounded-2xl border border-slate-800/50 backdrop-blur-sm transform scale-95 z-0"></div>
-            
-            <div className="relative z-20 bg-slate-900/90 border border-indigo-500/30 rounded-2xl p-5 lg:p-6 shadow-2xl backdrop-blur-2xl text-left transition-all duration-500">
-              <div className="flex items-center justify-between mb-2 lg:mb-3">
-                <div className="flex items-center space-x-3">
-                  <div className="w-9 h-9 lg:w-10 lg:h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-blue-600 flex items-center justify-center font-bold text-xs text-white shadow-md">
-                    {currentReview.avatar}
-                  </div>
-                  <div>
-                    <h4 className="font-bold text-sm text-white">{currentReview.name}</h4>
-                    <p className="text-[11px] text-indigo-300">{currentReview.role} • <span className="text-slate-300">{currentReview.business}</span></p>
-                  </div>
+
+          <h1 className="text-4xl font-light leading-tight text-white xl:text-5xl">
+            Your experience.
+            <br />
+            <span className="font-serif italic text-indigo-400">
+              Your voice.
+            </span>
+          </h1>
+
+          <p className="mt-4 max-w-md text-sm leading-6 text-slate-400">
+            Choose a rating, explore review drafts, and share feedback that
+            reflects your actual experience.
+          </p>
+
+          <div className="mt-9 rounded-2xl border border-white/10 bg-slate-900/70 p-5 shadow-2xl backdrop-blur-xl xl:p-6">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex min-w-0 items-center gap-3">
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-blue-600 text-sm font-bold text-white">
+                  {currentReview.avatar}
                 </div>
-                <div className="flex space-x-0.5">
-                  {[...Array(5)].map((_, i) => (
-                    <svg key={i} className="w-3.5 h-3.5 text-amber-400 fill-amber-400" viewBox="0 0 20 20">
-                      <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                    </svg>
-                  ))}
+
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-semibold text-white">
+                    {currentReview.name}
+                  </p>
+                  <p className="mt-0.5 text-xs text-slate-400">
+                    {currentReview.role}
+                  </p>
                 </div>
               </div>
-              <p className="text-xs text-slate-200 leading-relaxed italic min-h-[35px]">
-                {currentReview.comment}
-              </p>
-              <div className="mt-3 pt-2 border-t border-slate-800 flex items-center justify-between text-[10px] text-slate-300">
-                <span>Industry: <strong className="text-indigo-300">{currentReview.industry}</strong></span>
-                <span className="bg-indigo-500/20 text-indigo-200 px-2 py-0.5 rounded border border-indigo-500/30">Verified Review</span>
+
+              <div className="flex shrink-0 gap-0.5 text-amber-400">
+                {[1, 2, 3, 4, 5].map((star) => (
+                  <span key={star} className="text-sm">
+                    ★
+                  </span>
+                ))}
               </div>
+            </div>
+
+            <p className="mt-5 text-sm leading-6 text-slate-300">
+              “{currentReview.comment}”
+            </p>
+
+            <div className="mt-5 flex items-center justify-between gap-3 border-t border-white/10 pt-4">
+              <div className="min-w-0">
+                <p className="text-[10px] uppercase tracking-wider text-slate-500">
+                  Business category
+                </p>
+                <p className="mt-1 truncate text-xs font-medium text-indigo-300">
+                  {currentReview.industry}
+                </p>
+              </div>
+
+              <span className="shrink-0 rounded-full border border-indigo-400/20 bg-indigo-400/10 px-3 py-1.5 text-[10px] text-indigo-200">
+                Review portal
+              </span>
             </div>
           </div>
 
-          {/* Slide Indicators */}
-          <div className="hidden sm:flex items-center space-x-2 mt-4 lg:mt-6">
-            {reviewSlides.map((_, idx) => (
+          <div className="mt-5 flex items-center gap-2">
+            {reviewSlides.map((slide, index) => (
               <button
-                key={idx}
-                onClick={() => setActiveSlide(idx)}
-                className={`h-1.5 rounded-full transition-all duration-300 ${activeSlide === idx ? 'w-8 bg-indigo-500' : 'w-2 bg-slate-700'}`}
-                aria-label={`Slide ${idx + 1}`}
+                key={slide.business}
+                type="button"
+                onClick={() => setActiveSlide(index)}
+                aria-label={`Show testimonial ${index + 1}`}
+                aria-pressed={activeSlide === index}
+                className={`h-1.5 rounded-full transition-all ${
+                  activeSlide === index
+                    ? "w-8 bg-indigo-400"
+                    : "w-2 bg-slate-700 hover:bg-slate-500"
+                }`}
               />
             ))}
           </div>
         </div>
 
-        {/* Footer info */}
-        <div className="relative z-10 text-[10px] lg:text-[11px] text-slate-300 flex justify-between items-center border-t border-slate-800/80 pt-2 lg:pt-4">
-          <span>&copy; 2026 Digital Paaji. All rights reserved.</span>
-          <span className="text-indigo-300 font-medium">Review Portal</span>
-        </div>
-      </div>
+        <p className="relative z-10 mt-1 text-center text-[10px] tracking-wider text-slate-300 lg:hidden">
+          SMART BUSINESS REVIEW PORTAL
+        </p>
 
-      {/* RIGHT SIDE: Clean Review Generator Interface */}
-      <div className="w-full lg:w-1/2 h-[80vh] lg:h-screen flex flex-col justify-center px-4 sm:px-12 xl:px-16 py-4 overflow-hidden bg-white text-slate-900 shadow-2xl">
-        
-        <div className="w-full max-w-xl mx-auto flex flex-col justify-center my-auto">
-          
-          {isExpired ? (
-            <div className="bg-red-50 border border-red-200 rounded-2xl p-6 text-center shadow-lg">
-              <span className="text-3xl">⏳</span>
-              <h2 className="text-xl font-bold text-red-700 mt-2">QR Code Expired</h2>
-              <p className="text-xs text-red-600 mt-2">
-                This review QR code has completed its 1-year validity period. Please contact the <strong>Digital Paaji</strong> team to renew your subscription and reactivate this portal.
+        <footer className="relative z-10 hidden items-center justify-between border-t border-white/10 pt-4 text-[10px] text-slate-500 lg:flex">
+          <span>© 2026 Digital Paaji</span>
+          <span className="text-indigo-300">Review Portal</span>
+        </footer>
+      </aside>
+
+      {/* RIGHT PANEL */}
+      <section className="flex h-[80dvh] min-h-0 flex-1 flex-col overflow-hidden bg-white text-slate-900 lg:h-dvh lg:w-1/2 lg:flex-none">
+        {isExpired ? (
+          <div className="flex flex-1 items-center justify-center overflow-y-auto p-5 sm:p-8">
+            <div className="w-full max-w-md rounded-2xl border border-red-200 bg-red-50 p-6 text-center shadow-sm">
+              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-red-100 text-2xl">
+                ⏳
+              </div>
+
+              <h2 className="mt-4 text-xl font-bold text-red-800">
+                QR Code Expired
+              </h2>
+
+              <p className="mt-2 text-sm leading-6 text-red-700">
+                This review QR code has expired or has an invalid expiry
+                timestamp. Please contact the Digital Paaji team to verify
+                and reactivate it.
               </p>
             </div>
-          ) : (
-            <>
-              {/* Header Badge */}
-              <div className="text-center mb-3">
-                <span className="inline-block bg-indigo-100 text-indigo-800 text-[11px] font-semibold px-3 py-1 rounded-full uppercase tracking-wider mb-1">
-                  ✨ Customer Feedback
-                </span>
-                <h2 className="font-serif italic font-normal text-indigo-500 underline decoration-indigo-500/50 text-3xl ">
+          </div>
+        ) : (
+          <>
+            {/* Header */}
+            <header className="flex shrink-0 items-center gap-3 border-b border-slate-100 bg-gradient-to-r from-indigo-50 to-violet-50 px-4 py-3 sm:px-6 lg:px-8">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-indigo-100 bg-white text-lg shadow-sm">
+                ✨
+              </div>
+
+              <div className="min-w-0 flex-1">
+                <h2 className="truncate text-sm font-bold text-slate-900 sm:text-base">
                   {businessName}
                 </h2>
-                {location && <p className="text-xs text-gray-400">{location}</p>}
-                <p className="text-xs text-gray-500 mt-0.5">
-                  Select your rating & pick an AI-crafted review option
+
+                {location && (
+                  <p className="mt-0.5 truncate text-[11px] text-slate-500">
+                    📍 {location}
+                  </p>
+                )}
+
+                <p className="mt-0.5 text-[10px] text-slate-500 sm:text-[11px]">
+                  Select your rating and choose a review draft
                 </p>
               </div>
 
-              {/* Star Rating Selector */}
-              <div className="flex justify-center gap-2 my-2.5 bg-indigo-50/60 py-2.5 rounded-2xl border border-indigo-100">
-                {[1, 2, 3, 4, 5].map((s) => (
-                  <button
-                    key={s}
-                    type="button"
-                    onClick={() => setStars(s)}
-                    className={`text-2xl lg:text-3xl transition transform active:scale-95 hover:scale-110 ${
-                      s <= stars ? "text-amber-400 drop-shadow-sm" : "text-gray-300"
-                    }`}
-                  >
-                    ★
-                  </button>
-                ))}
-              </div>
+              <span className="hidden shrink-0 rounded-full border border-indigo-100 bg-white px-3 py-1.5 text-[10px] font-semibold text-indigo-600 sm:inline-flex">
+                ✦ AI Reviews
+              </span>
+            </header>
 
-              {/* Review Options Cards Container */}
-              <div className="mb-3">
-                <div className="flex justify-between items-center mb-1">
-                  <label className="block text-[11px] font-semibold text-gray-600 uppercase tracking-wider">
-                    AI Review Suggestions ({reviewsList.length})
-                  </label>
-                  <button
-                    onClick={() => fetchAiReviews(stars)}
-                    disabled={loading}
-                    className="text-xs text-indigo-600 hover:text-indigo-700 font-medium underline"
-                  >
-                    🔄 Refresh AI
-                  </button>
+            {/* Rating */}
+            <div className="shrink-0 px-4 pt-3 sm:px-6 lg:px-8 lg:pt-5">
+              <div className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 sm:px-4">
+                <div>
+                  <p className="text-xs font-bold text-slate-700">
+                    Your rating
+                  </p>
+                  <p className="mt-0.5 text-[10px] text-slate-400">
+                    Choose 1–5 stars
+                  </p>
                 </div>
 
-                <div className="max-h-[250px] overflow-y-auto space-y-2 pr-1">
-                  {loading ? (
-                    <div className="py-8 text-center text-xs text-indigo-700 font-medium animate-pulse flex flex-col items-center gap-1.5">
-                      <span>🤖</span> Gemini is writing tailored reviews...
-                    </div>
-                  ) : (
-                    reviewsList.map((rev, index) => (
-                      <div
-                        key={index}
-                        onClick={() => setSelectedReview(rev)}
-                        className={`p-2.5 rounded-xl border text-xs sm:text-sm cursor-pointer transition-all ${
-                          selectedReview === rev
-                            ? "border-indigo-600 bg-indigo-50/75 shadow-xs ring-1 ring-indigo-500"
-                            : "border-gray-200 bg-gray-50/50 hover:bg-gray-100/80 text-gray-700"
+                <div className="flex shrink-0 items-center gap-0.5 sm:gap-1">
+                  {[1, 2, 3, 4, 5].map((star) => (
+                    <button
+                      key={star}
+                      type="button"
+                      onClick={() => setStars(star)}
+                      aria-label={`Rate ${star} out of 5 stars`}
+                      aria-pressed={stars === star}
+                      className={`rounded-md p-0.5 text-2xl leading-none transition active:scale-90 sm:text-[28px] ${
+                        star <= stars
+                          ? "text-amber-400"
+                          : "text-slate-300 hover:text-amber-200"
+                      }`}
+                    >
+                      ★
+                    </button>
+                  ))}
+
+                  <span className="ml-1 text-[10px] font-bold tabular-nums text-slate-500">
+                    {stars}/5
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Review heading */}
+            <div className="flex shrink-0 items-center justify-between gap-3 px-4 pb-2 pt-4 sm:px-6 lg:px-8">
+              <div className="min-w-0">
+                <h3 className="text-xs font-bold text-slate-800 sm:text-sm">
+                  Review suggestions
+                  {reviewsList.length > 0 && (
+                    <span className="ml-2 rounded-md bg-indigo-50 px-2 py-1 text-[10px] font-semibold text-indigo-600">
+                      {reviewsList.length}
+                    </span>
+                  )}
+                </h3>
+
+                <p className="mt-1 text-[10px] text-slate-400">
+                  Choose a draft that matches your experience
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => fetchAiReviews(stars)}
+                disabled={loading}
+                className="shrink-0 rounded-lg border border-indigo-100 bg-indigo-50 px-3 py-2 text-[10px] font-semibold text-indigo-700 transition hover:bg-indigo-100 disabled:cursor-not-allowed disabled:opacity-50 sm:text-xs"
+              >
+                {loading ? "Generating..." : "↻ Regenerate"}
+              </button>
+            </div>
+
+            {/* Scrollable review section */}
+            <div
+              className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-3 sm:px-6 lg:px-8"
+              aria-live="polite"
+            >
+              {loading ? (
+                <div className="flex min-h-full flex-col items-center justify-center py-8 text-center">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-indigo-50">
+                    <span className="animate-pulse text-2xl text-indigo-600">
+                      ✦
+                    </span>
+                  </div>
+
+                  <p className="mt-4 text-sm font-semibold text-slate-800">
+                    Creating review suggestions
+                  </p>
+                  <p className="mt-1 text-xs text-slate-400">
+                    Please wait while the AI prepares your drafts.
+                  </p>
+                </div>
+              ) : apiError ? (
+                <div className="flex min-h-full flex-col items-center justify-center py-8 text-center">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-red-50 text-xl text-red-600">
+                    !
+                  </div>
+
+                  <h3 className="mt-3 text-sm font-bold text-slate-800">
+                    Could not generate reviews
+                  </h3>
+
+                  <p className="mt-2 max-w-sm text-xs leading-5 text-slate-500">
+                    {apiError}
+                  </p>
+
+                  <button
+                    type="button"
+                    onClick={() => fetchAiReviews(stars)}
+                    className="mt-4 rounded-lg bg-indigo-600 px-4 py-2.5 text-xs font-semibold text-white transition hover:bg-indigo-700"
+                  >
+                    Try again
+                  </button>
+                </div>
+              ) : reviewsList.length > 0 ? (
+                <div className="space-y-2.5">
+                  {reviewsList.map((review, index) => {
+                    const selected = selectedReview === review;
+
+                    return (
+                      <button
+                        key={`${index}-${review}`}
+                        type="button"
+                        onClick={() => setSelectedReview(review)}
+                        aria-pressed={selected}
+                        className={`block w-full rounded-xl border p-3 text-left transition sm:p-4 ${
+                          selected
+                            ? "border-indigo-500 bg-indigo-50/70 ring-1 ring-indigo-200"
+                            : "border-slate-200 bg-white hover:border-indigo-200 hover:bg-slate-50"
                         }`}
                       >
-                        <div className="flex items-center justify-between mb-0.5">
-                          <span className="font-semibold text-indigo-900 text-[10px] uppercase">
-                            Option #{index + 1}
+                        <div className="mb-2 flex items-center justify-between gap-3">
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-700">
+                            Option {index + 1}
                           </span>
-                          {selectedReview === rev && (
-                            <span className="text-[9px] bg-indigo-600 text-white px-2 py-0.5 rounded-full font-medium">
-                              Selected
+
+                          {selected ? (
+                            <span className="rounded-full bg-indigo-600 px-2 py-1 text-[9px] font-semibold text-white">
+                              ✓ Selected
+                            </span>
+                          ) : (
+                            <span className="text-[10px] text-slate-400">
+                              Select draft
                             </span>
                           )}
                         </div>
-                        <p className="italic leading-relaxed text-xs">"{rev}"</p>
-                      </div>
-                    ))
-                  )}
-                </div>
-              </div>
 
-              {/* Post Button */}
+                        <p className="whitespace-pre-wrap break-words text-xs leading-5 text-slate-600 sm:text-[13px] sm:leading-6">
+                          {review}
+                        </p>
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="flex min-h-full flex-col items-center justify-center py-8 text-center">
+                  <span className="text-3xl">✍️</span>
+                  <p className="mt-3 text-sm font-semibold text-slate-800">
+                    Ready to write your review?
+                  </p>
+                  <p className="mt-1 text-xs text-slate-400">
+                    Generate suggestions to get started.
+                  </p>
+
+                  <button
+                    type="button"
+                    onClick={() => fetchAiReviews(stars)}
+                    className="mt-4 rounded-lg bg-indigo-600 px-4 py-2.5 text-xs font-semibold text-white"
+                  >
+                    Generate reviews
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Fixed bottom action */}
+            <footer className="shrink-0 border-t border-slate-100 bg-white px-4 pb-[max(10px,env(safe-area-inset-bottom))] pt-3 sm:px-6 lg:px-8 lg:pb-5">
               <button
-                onClick={() => handleCopyAndOpen()}
-                disabled={loading || !selectedReview}
-                className="w-full py-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs uppercase tracking-wider transition shadow-lg shadow-indigo-600/30 active:scale-[0.98] disabled:opacity-50"
+                type="button"
+                onClick={handleCopyAndOpen}
+                disabled={loading || !selectedReview || Boolean(apiError)}
+                className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 px-4 py-3 text-xs font-bold text-white shadow-lg shadow-indigo-100 transition hover:from-indigo-700 hover:to-violet-700 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50 sm:py-3.5 sm:text-sm"
               >
-                ⭐ Copy & Post on Google Maps
+                <svg
+                  className="h-4 w-4"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  aria-hidden="true"
+                >
+                  <rect x="8" y="8" width="12" height="12" rx="2" />
+                  <path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3" />
+                </svg>
+
+                Copy & Continue to Google
+                <span aria-hidden="true">→</span>
               </button>
 
-              <p className="text-[10px] text-gray-400 text-center mt-2">
-                Review copies automatically. Just paste it on Google & submit!
+              <p className="mt-2 text-center text-[9px] leading-4 text-slate-400 sm:text-[10px]">
+                Review the draft and make sure it reflects your genuine experience.
               </p>
-            </>
-          )}
+            </footer>
+          </>
+        )}
+      </section>
 
-          {/* Toast Notification */}
-          {toast && (
-            <div className="absolute bottom-5 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-xs px-4 py-2 rounded-full shadow-xl flex items-center gap-2 animate-bounce">
-              <span>✅</span> Copied! Opening Google Maps...
-            </div>
-          )}
-
+      {/* Toast */}
+      {toast && (
+        <div
+          role="status"
+          className="fixed bottom-5 left-1/2 z-50 w-max max-w-[calc(100%-32px)] -translate-x-1/2 rounded-full border border-slate-700 bg-slate-900 px-4 py-3 text-center text-xs font-medium text-white shadow-2xl"
+        >
+          {toast}
         </div>
-      </div>
-
-    </div>
+      )}
+    </main>
   );
 }
 
 export default function ReviewPage() {
   return (
-    <Suspense fallback={<div className="min-h-screen bg-[#090D16] flex items-center justify-center text-indigo-500">Loading Portal...</div>}>
+    <Suspense
+      fallback={
+        <div className="flex h-dvh items-center justify-center bg-[#090D16] text-sm text-indigo-300">
+          Loading review portal...
+        </div>
+      }
+    >
       <ReviewContent />
     </Suspense>
   );
 }
-
-
