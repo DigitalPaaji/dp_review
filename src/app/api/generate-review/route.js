@@ -94,20 +94,23 @@ export async function POST(req) {
 // Customer's actual experience: ${customerExperience}
   
  const prompt = `
-Generate exactly 5 suggested review  for  customer 
+Generate exactly 5 distinct customer review drafts based strictly on the provided Business Details and Description.
 
-Business: ${businessName.trim()}
-Location: ${location || "Not specified"}
-Industry: ${industry || "Not specified"}
-Description: ${description || "Not specified"}
-Services: ${services || "Not specified"}
+Business Details:
+- Name: ${businessName.trim()}
+- Location: ${location || "Not specified"}
+- Industry: ${industry || "Not specified"}
+- Description: ${description || "Not specified"}
+- Services: ${services || "Not specified"}
 
-Requested rating: ${rating}/5
+Requested Rating: ${rating}/5
 
-Write natural, distinct  that match the rating.
-Do not invent visits, transactions, employees, or specific events.
-Keep each draft around 30–70 words.
-Return only JSON in this format:
+Guidelines:
+1. Language & Tone: Write in natural, casual Hinglish (a seamless blend of conversational Hindi written in Roman script and everyday English, e.g., using words like "kaafi", "sahi", "badhiya", "ekdum", "service achhi thi", "worth it"). Avoid stiff, formal, or textbook English.
+2. Grounding: Rely strictly on the business name, description, and services provided. Do not invent fake visits, specific employee names, fictitious transactions, or fabricated story arcs.
+3. Rating Match: The sentiment and tone must strictly reflect the requested rating of ${rating}/5.
+4. Length: Keep each draft concise, between 30 to 70 words.
+5. Output Format: Return strictly valid JSON with no markdown wrapping or extra commentary:
 {"reviews":["draft 1","draft 2","draft 3","draft 4","draft 5"]}
 `;
 
