@@ -113,6 +113,7 @@ Do not mention that you are an AI.
 Do not use marketing language.
 Do not use hashtags.
 Do not use emojis unless they naturally fit the customer's tone.
+language hinglish 
 
 Business: ${businessName.trim()}
 Location: ${location || "Not specified"}
