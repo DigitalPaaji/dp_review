@@ -93,8 +93,26 @@ export async function POST(req) {
     // }
 // Customer's actual experience: ${customerExperience}
   
- const prompt = `
-Generate exactly 5 suggested review  for  customer 
+
+
+
+
+
+
+
+
+
+const prompt = `
+You are an expert at writing realistic customer feedback for local businesses.
+
+IMPORTANT:
+These are review DRAFTS/SUGGESTIONS for customers.
+Do not pretend that you personally visited the business.
+Do not invent highly specific facts that were not provided.
+Do not mention that you are an AI.
+Do not use marketing language.
+Do not use hashtags.
+Do not use emojis unless they naturally fit the customer's tone.
 
 Business: ${businessName.trim()}
 Location: ${location || "Not specified"}
@@ -104,12 +122,63 @@ Services: ${services || "Not specified"}
 
 Requested rating: ${rating}/5
 
-Write natural, distinct  that match the rating.
-Do not invent visits, transactions, employees, or specific events.
-Keep each draft around 30-70 words.
-Return only JSON in this format:
-{"reviews":["draft 1","draft 2","draft 3","draft 4","draft 5"]}
-`;
+
+
+
+1. Generate exactly 5 different review options.
+2. Each review should be approximately 40-80 words.
+3. Every review must be relevant to the business.
+4. Use the business name naturally where appropriate, but do not repeat it excessively.
+5. Avoid making all five reviews sound alike.
+6. Vary sentence structure and vocabulary.
+7. Make them sound like different real customers.
+8. Do not include quotation marks around the review itself.
+9. Do not mention information that is not provided in the business details.
+10. Match the selected star rating accurately.
+11. Do not create fake specific employee names, prices, dates or transactions.
+12. Do not make medical, legal, financial or safety claims unless explicitly supplied.
+
+OUTPUT REQUIREMENT:
+
+Return ONLY valid JSON.
+
+The response must be an object in exactly this format:
+
+{
+  "reviews": [
+    "Review 1",
+    "Review 2",
+    "Review 3",
+    "Review 4",
+    "Review 5"
+  ]
+}
+
+
+
+
+
+
+
+
+
+//  const prompt = `
+// Generate exactly 5 suggested review  for  customer 
+
+// Business: ${businessName.trim()}
+// Location: ${location || "Not specified"}
+// Industry: ${industry || "Not specified"}
+// Description: ${description || "Not specified"}
+// Services: ${services || "Not specified"}
+
+// Requested rating: ${rating}/5
+
+// Write natural, distinct  that match the rating.
+// Do not invent visits, transactions, employees, or specific events.
+// Keep each draft around 30-70 words.
+// Return only JSON in this format:
+// {"reviews":["draft 1","draft 2","draft 3","draft 4","draft 5"]}
+// `;
 
 const systemPrompt = `You are a real customer writing quick, authentic reviews on Google Maps. Write exactly how everyday people post from their phones: natural, direct, and conversational. Never use corporate marketing buzzwords or AI fluff. Output raw, valid JSON only without markdown formatting.`;
 
