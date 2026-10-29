@@ -130,7 +130,7 @@ Requested rating: ${rating}/5
 2. Each review should be approximately 40-80 words.
 3. Every review must be relevant to the business.
 4. Use the business name naturally where appropriate, but do not repeat it excessively.
-5. Avoid making all five reviews sound alike.
+5. Avoid making all five reviews sound alike but make sure all reviews must be as per the perspective of a customer giving genuine and honest review in casual tone.
 6. Vary sentence structure and vocabulary.
 7. Make them sound like different real customers.
 8. Do not include quotation marks around the review itself.
