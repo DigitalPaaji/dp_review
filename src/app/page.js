@@ -1,24 +1,21 @@
+
 "use client";
-import React, { useState, useEffect } from "react";
+
+import React, { useState } from "react";
+import { useRouter } from "next/navigation";
+
 import LeftHeroPanel from "./components/LeftHeroPanel";
 import ClientLogin from "./components/ClientLogin";
 import AdminLogin from "./components/AdminLogin";
 
-import { useRouter } from "next/navigation";
-
 export default function PortalApp() {
   const [viewMode, setViewMode] = useState("client-login");
- 
-  const routes = useRouter()
-  
-
 
   const [clientEmail, setClientEmail] = useState("");
   const [clientPassword, setClientPassword] = useState("");
   const [clientLoginError, setClientLoginError] = useState("");
 
-
- 
+  const router = useRouter();
 
   const handleClientLogin = async (e) => {
     e.preventDefault();
@@ -27,74 +24,77 @@ export default function PortalApp() {
     try {
       const res = await fetch("/api/auth/login", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+        },
         body: JSON.stringify({
           email: clientEmail,
           password: clientPassword,
         }),
-        credentials:"include"
-      });   
+        credentials: "include",
+      });
 
       const data = await res.json();
 
       if (!res.ok || !data.success) {
-        setClientLoginError(data?.message || "Unable to log in.");
+        setClientLoginError(
+          data?.message || "Unable to log in."
+        );
         return;
       }
-   routes.push("/client")
 
+      router.push("/client");
     } catch {
-      setClientLoginError("Connection error. Please try again.");
+      setClientLoginError(
+        "Connection error. Please try again."
+      );
     }
   };
 
-  
-
   return (
-    <div className="w-screen overflow-hidden  grid grid-cols-2  font-sans bg-[#090D16] text-slate-100 selection:bg-indigo-500 selection:text-white">
-      <LeftHeroPanel />
+    <main className="min-h-screen w-full overflow-x-hidden bg-[#090D16] font-sans text-slate-100 selection:bg-indigo-500 selection:text-white">
+      <div className="grid min-h-screen w-full grid-cols-1 lg:grid-cols-2">
 
-      <div className="w-full  h-screen flex flex-col justify-center px-6 sm:px-12 xl:px-16 py-6 overflow-y-auto bg-white text-slate-900 shadow-2xl">
-        <div className="w-full max-w-xl mx-auto flex flex-col justify-center my-auto">
-          {viewMode === "client-login" && (
-            <ClientLogin
-              clientEmail={clientEmail}
-              setClientEmail={setClientEmail}
-              clientPassword={clientPassword}
-              setClientPassword={setClientPassword}
-              handleClientLogin={handleClientLogin}
-              clientLoginError={clientLoginError}
-              setViewMode={setViewMode}
-            />
-          )}
+        {/* Left Hero Section */}
+        <section className="hidden min-h-screen lg:block">
+          <LeftHeroPanel />
+        </section>
 
-         {viewMode === "admin-login" && (
-            <AdminLogin setViewMode={setViewMode} />
-          )}
+        {/* Login Section */}
+        <section className="flex min-h-screen w-full items-center justify-center bg-white px-4 py-8 text-slate-900 sm:px-8 md:px-12 lg:px-10 xl:px-16">
+          <div className="my-auto flex w-full max-w-xl flex-col justify-center">
 
-         {/*   {viewMode === "admin-dashboard" && (
-            <AdminDashboard
-              clientsList={clientsList}
-              setClientsList={setClientsList}
-              setViewMode={setViewMode}
-              handleLogout={handleLogout}
-            />
-          )}
+            {/* Mobile Brand / Heading */}
+            <div className="mb-8 text-center lg:hidden">
+              <h1 className="text-3xl font-extrabold tracking-tight text-slate-900 sm:text-4xl">
+                Welcome Back
+              </h1>
 
-          {viewMode === "client-dashboard" && currentClient && (
-            <ClientDashboard
-              currentClient={currentClient}
-              setCurrentClient={setCurrentClient}
-              setViewMode={setViewMode}
-              handleLogout={handleLogout}
-              handleClientGenerateQr={handleClientGenerateQr}
-              handleCopy={handleCopy}
-              copied={copied}
-            />
-          )} */}
-        </div>
+              <p className="mt-2 text-sm leading-6 text-slate-500 sm:text-base">
+                Sign in to access your portal.
+              </p>
+            </div>
+
+            {viewMode === "client-login" && (
+              <ClientLogin
+                clientEmail={clientEmail}
+                setClientEmail={setClientEmail}
+                clientPassword={clientPassword}
+                setClientPassword={setClientPassword}
+                handleClientLogin={handleClientLogin}
+                clientLoginError={clientLoginError}
+                setViewMode={setViewMode}
+              />
+            )}
+
+            {viewMode === "admin-login" && (
+              <AdminLogin setViewMode={setViewMode} />
+            )}
+
+          </div>
+        </section>
+
       </div>
-    </div>
+    </main>
   );
 }
-

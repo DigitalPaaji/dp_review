@@ -22,6 +22,7 @@ import {
   FiLoader,
   FiDatabase,
 } from "react-icons/fi";
+import { MdDeleteSweep } from "react-icons/md";
 
 const ClientsPage = () => {
   const searchParams = useSearchParams();
@@ -148,6 +149,29 @@ const ClientsPage = () => {
       (_, i) => start + i
     );
   };
+
+  const deleteClient = async(clientid)=>{
+try {      setLoading(true);
+  const resposne = await axios.delete(`/api/admin/clients/${clientid}`)
+   const data = await resposne.data;
+   if(data.success){
+    getAllClients();
+    
+   }
+   else{
+setError(data.message)
+}
+
+} catch (error) {
+  setError(error?.response?.data?.message)
+}finally{
+        setLoading(false);
+}
+  } 
+
+  
+
+
 
   return (
     <div className="h-screen overflow-auto bg-gray-50 p-4 text-gray-900 sm:p-6 lg:p-8">
@@ -292,6 +316,9 @@ const ClientsPage = () => {
                   <th className="px-5 py-4 text-right font-semibold">
                     Links
                   </th>
+                  <th className="px-5 py-4 text-right font-semibold">
+                    Action
+                  </th>
                 </tr>
               </thead>
 
@@ -435,6 +462,15 @@ const ClientsPage = () => {
                             </a>
                           )}
                         </div>
+                      </td>
+
+                      <td className="px-5 py-4">
+                         <div className="flex justify-end gap-2 ">
+                        
+                          <MdDeleteSweep onClick={()=>deleteClient(client._id)} className="text-2xl cursor-pointer"   />
+
+                        </div>
+
                       </td>
                     </tr>
                   ))
